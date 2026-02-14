@@ -1,0 +1,45 @@
+workflows:
+  zonesync-ios:
+    name: ZoneSync iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    integrations:
+      app_store_connect: Kai Builds
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier:
+          - ai.e6.zonesync
+          - ai.e6.zonesync.widget
+      vars:
+        BUNDLE_ID: ai.e6.zonesync
+        APP_STORE_CONNECT_ISSUER_ID: 6542e2a9-fff8-4124-9083-2186cad6de0b
+        APP_STORE_CONNECT_KEY_IDENTIFIER: 3529W4RQ55
+      xcode: latest
+      cocoapods: default
+    scripts:
+      - name: Install XcodeGen
+        script: |
+          brew install xcodegen
+      - name: Generate Xcode project
+        script: |
+          xcodegen generate
+      - name: Set up code signing
+        script: |
+          xcode-project use-profiles
+      - name: Build iOS app
+        script: |
+          xcode-project build-ipa \
+            --project "ZoneSync.xcodeproj" \
+            --scheme "ZoneSync" \
+            --archive-flags="-destination 'generic/platform=iOS'"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+    publishing:
+      app_store_connect:
+        auth: integration
+        api_key: Kai Builds
+        submit_to_testflight: true
+        submit_to_app_store: false
