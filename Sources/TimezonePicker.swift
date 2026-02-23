@@ -6,22 +6,15 @@ struct TimezonePicker: View {
     @State private var searchText = ""
 
     private var allTimezones: [(id: String, display: String, city: String)] {
-        TimeZone.knownTimeZoneIdentifiers.compactMap { id in
+        let referenceDate = Date()
+        let timezones = TimeZone.knownTimeZoneIdentifiers.compactMap { id -> (id: String, display: String, city: String)? in
             guard let tz = TimeZone(identifier: id) else { return nil }
             let city = id.components(separatedBy: "/").last?.replacingOccurrences(of: "_", with: " ") ?? id
-            let offset = tz.secondsFromGMT(for: Date())
-            let hours = offset / 3600
-            let mins = abs(offset % 3600) / 60
-            let offsetStr: String
-            if mins == 0 {
-                offsetStr = String(format: "UTC%+d", hours)
-            } else {
-                offsetStr = String(format: "UTC%+d:%02d", hours, mins)
-            }
+            let offsetStr = ClockMath.utcOffsetLabel(for: tz, at: referenceDate)
             let display = "\(city) (\(offsetStr))"
             return (id: id, display: display, city: city)
         }
-        .sorted { $0.city < $1.city }
+        return timezones.sorted { lhs, rhs in lhs.city < rhs.city }
     }
 
     private var filteredTimezones: [(id: String, display: String, city: String)] {

@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct EditPersonView: View {
     @Environment(\.modelContext) private var modelContext
@@ -26,11 +27,15 @@ struct EditPersonView: View {
         .alert("Delete Person", isPresented: $showingDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 modelContext.delete(person)
+                WidgetCenter.shared.reloadAllTimelines()
                 dismiss()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Are you sure you want to remove \(person.name)?")
+        }
+        .onDisappear {
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 

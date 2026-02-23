@@ -1,9 +1,11 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct AddPersonView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Person.sortOrder) private var people: [Person]
     @Query(sort: \Team.sortOrder) private var teams: [Team]
 
     @State private var name = ""
@@ -29,7 +31,7 @@ struct AddPersonView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") { savePerson() }
-                        .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
+                        .disabled(trimmedName.isEmpty)
                 }
             }
             .sheet(isPresented: $showingTimezonePicker) {
@@ -92,15 +94,22 @@ struct AddPersonView: View {
         return tz.localizedName(for: .shortGeneric, locale: .current) ?? selectedTimezone
     }
 
+    private var trimmedName: String {
+        name.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func savePerson() {
+        let nextSortOrder = (people.map(\.sortOrder).max() ?? -1) + 1
         let person = Person(
-            name: name.trimmingCharacters(in: .whitespaces),
+            name: trimmedName,
             timezoneIdentifier: selectedTimezone,
             workStartHour: workStart,
             workEndHour: workEnd,
-            teamId: selectedTeamId
+            teamId: selectedTeamId,
+            sortOrder: nextSortOrder
         )
         modelContext.insert(person)
+        WidgetCenter.shared.reloadAllTimelines()
         dismiss()
     }
 }

@@ -2,7 +2,6 @@ import SwiftUI
 import SwiftData
 
 struct ContentView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \Person.sortOrder) private var people: [Person]
     @Query(sort: \Team.sortOrder) private var teams: [Team]
     @State private var showingAddPerson = false
@@ -26,7 +25,7 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            .navigationTitle("ZoneSync")
+            .navigationTitle("ZoneClock")
             .toolbar { toolbarContent }
             .sheet(isPresented: $showingAddPerson) {
                 AddPersonView()
@@ -36,6 +35,11 @@ struct ContentView: View {
             }
             .onReceive(timer) { _ in
                 currentTime = Date()
+            }
+            .onChange(of: teams.map(\.id)) { _, teamIDs in
+                if let selectedTeamId, !teamIDs.contains(selectedTeamId) {
+                    self.selectedTeamId = nil
+                }
             }
         }
     }

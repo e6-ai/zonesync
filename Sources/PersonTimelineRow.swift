@@ -4,6 +4,10 @@ struct PersonTimelineRow: View {
     let person: Person
     let currentTime: Date
 
+    private var workHours: WorkHours {
+        WorkHours(startHour: person.workStartHour, endHour: person.workEndHour)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             headerRow
@@ -56,53 +60,51 @@ struct PersonTimelineRow: View {
     }
 
     private func workingHoursOverlay(width: CGFloat) -> some View {
-        let startFraction = Double(person.workStartHour) / 24.0
-        let endFraction = Double(person.workEndHour) / 24.0
-        let barWidth = (endFraction - startFraction) * width
+        ZStack(alignment: .leading) {
+            ForEach(Array(workHours.ranges.enumerated()), id: \.offset) { _, range in
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.green.opacity(0.3))
+                    .frame(width: overlayWidth(for: range, totalWidth: width))
+                    .offset(x: overlayOffset(for: range, totalWidth: width))
+            }
+        }
+    }
 
-        return RoundedRectangle(cornerRadius: 4)
-            .fill(Color.green.opacity(0.3))
-            .frame(width: barWidth)
-            .offset(x: startFraction * width)
+    private func overlayWidth(for range: Range<Int>, totalWidth: CGFloat) -> CGFloat {
+        let rangeMinutes = range.upperBound - range.lowerBound
+        return CGFloat(rangeMinutes) / CGFloat(ClockMath.minutesPerDay) * totalWidth
+    }
+
+    private func overlayOffset(for range: Range<Int>, totalWidth: CGFloat) -> CGFloat {
+        CGFloat(range.lowerBound) / CGFloat(ClockMath.minutesPerDay) * totalWidth
     }
 
     private func currentTimeIndicator(width: CGFloat) -> some View {
-        let calendar = Calendar.current
-        var cal = calendar
-        cal.timeZone = person.timeZone
-        let hour = cal.component(.hour, from: currentTime)
-        let minute = cal.component(.minute, from: currentTime)
-        let fraction = (Double(hour) + Double(minute) / 60.0) / 24.0
+        let localMinute = ClockMath.currentLocalMinute(for: person.timeZone, at: currentTime)
+        let fraction = Double(localMinute) / Double(ClockMath.minutesPerDay)
 
         return Circle()
-            .fill(statusColor(hour: hour))
+            .fill(statusColor(localMinute: localMinute))
             .frame(width: 10, height: 10)
             .offset(x: fraction * width - 5)
     }
 
-    private func statusColor(hour: Int) -> Color {
-        if hour >= person.workStartHour && hour < person.workEndHour {
+    private func statusColor(localMinute: Int) -> Color {
+        let distanceToWorkWindow = workHours.distanceToRange(minutesFrom: localMinute)
+        if distanceToWorkWindow == 0 {
             return .green
-        } else if hour >= (person.workStartHour - 2) && hour < (person.workEndHour + 2) {
+        } else if distanceToWorkWindow <= 120 {
             return .yellow
         }
         return .red
     }
 
     private var localTimeString: String {
-        let formatter = DateFormatter()
-        formatter.timeZone = person.timeZone
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: currentTime)
+        let localMinute = ClockMath.currentLocalMinute(for: person.timeZone, at: currentTime)
+        return ClockMath.formattedTime(from: localMinute)
     }
 
     private var offsetLabel: String {
-        let seconds = person.timeZone.secondsFromGMT(for: currentTime)
-        let hours = seconds / 3600
-        let mins = abs(seconds % 3600) / 60
-        if mins == 0 {
-            return String(format: "UTC%+d", hours)
-        }
-        return String(format: "UTC%+d:%02d", hours, mins)
+        ClockMath.utcOffsetLabel(for: person.timeZone, at: currentTime)
     }
 }

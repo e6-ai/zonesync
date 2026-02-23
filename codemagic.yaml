@@ -1,6 +1,6 @@
 workflows:
-  zonesync-ios:
-    name: ZoneSync iOS
+  zoneclock-ios:
+    name: ZoneClock iOS
     max_build_duration: 60
     instance_type: mac_mini_m2
     integrations:
@@ -28,8 +28,8 @@ workflows:
       - name: Build iOS app
         script: |
           xcode-project build-ipa \
-            --project "ZoneSync.xcodeproj" \
-            --scheme "ZoneSync" \
+            --project "ZoneClock.xcodeproj" \
+            --scheme "ZoneClock" \
             --archive-flags="-destination 'generic/platform=iOS'"
     artifacts:
       - build/ios/ipa/*.ipa

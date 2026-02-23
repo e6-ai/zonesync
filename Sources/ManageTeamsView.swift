@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
+import WidgetKit
 
 struct ManageTeamsView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query(sort: \Person.sortOrder) private var people: [Person]
     @Query(sort: \Team.sortOrder) private var teams: [Team]
     @State private var newTeamName = ""
-    @State private var editingTeam: Team?
 
     var body: some View {
         NavigationStack {
@@ -54,11 +55,19 @@ struct ManageTeamsView: View {
         let team = Team(name: newTeamName.trimmingCharacters(in: .whitespaces), sortOrder: teams.count)
         modelContext.insert(team)
         newTeamName = ""
+        WidgetCenter.shared.reloadAllTimelines()
     }
 
     private func deleteTeams(at offsets: IndexSet) {
         for index in offsets {
-            modelContext.delete(teams[index])
+            let team = teams[index]
+            for person in people where person.teamId == team.id {
+                person.teamId = nil
+            }
+            modelContext.delete(team)
+        }
+        if !offsets.isEmpty {
+            WidgetCenter.shared.reloadAllTimelines()
         }
     }
 }

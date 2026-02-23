@@ -2,7 +2,7 @@ import WidgetKit
 import SwiftUI
 import SwiftData
 
-struct ZoneSyncWidgetEntry: TimelineEntry {
+struct ZoneClockWidgetEntry: TimelineEntry {
     let date: Date
     let people: [WidgetPerson]
 }
@@ -19,49 +19,51 @@ struct WidgetPerson: Identifiable {
     }
 }
 
-struct ZoneSyncWidgetProvider: TimelineProvider {
+struct ZoneClockWidgetProvider: TimelineProvider {
     let modelContainer: ModelContainer
 
     init() {
-        do {
-            modelContainer = try ModelContainer(for: Person.self, Team.self)
-        } catch {
-            fatalError("Failed to create ModelContainer: \(error)")
-        }
+        modelContainer = ZoneClockModelContainerFactory.makeSharedContainer()
     }
 
-    func placeholder(in context: Context) -> ZoneSyncWidgetEntry {
-        ZoneSyncWidgetEntry(date: Date(), people: [
+    func placeholder(in context: Context) -> ZoneClockWidgetEntry {
+        ZoneClockWidgetEntry(date: Date(), people: [
             WidgetPerson(name: "New York", timezoneIdentifier: "America/New_York", workStartHour: 9, workEndHour: 17),
             WidgetPerson(name: "London", timezoneIdentifier: "Europe/London", workStartHour: 9, workEndHour: 17),
             WidgetPerson(name: "Tokyo", timezoneIdentifier: "Asia/Tokyo", workStartHour: 9, workEndHour: 17)
         ])
     }
 
-    func getSnapshot(in context: Context, completion: @escaping (ZoneSyncWidgetEntry) -> Void) {
-        let entry = ZoneSyncWidgetEntry(date: Date(), people: fetchPeople())
+    func getSnapshot(in context: Context, completion: @escaping (ZoneClockWidgetEntry) -> Void) {
+        let entry = ZoneClockWidgetEntry(date: Date(), people: fetchPeople())
         completion(entry)
     }
 
-    func getTimeline(in context: Context, completion: @escaping (Timeline<ZoneSyncWidgetEntry>) -> Void) {
-        let entry = ZoneSyncWidgetEntry(date: Date(), people: fetchPeople())
+    func getTimeline(in context: Context, completion: @escaping (Timeline<ZoneClockWidgetEntry>) -> Void) {
+        let entry = ZoneClockWidgetEntry(date: Date(), people: fetchPeople())
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date()
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }
 
-    @MainActor
     private func fetchPeople() -> [WidgetPerson] {
-        let descriptor = FetchDescriptor<Person>(sortBy: [SortDescriptor(\.sortOrder)])
-        let results = (try? modelContainer.mainContext.fetch(descriptor)) ?? []
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<Person>(sortBy: [SortDescriptor(\Person.sortOrder)])
+        let results = (try? context.fetch(descriptor)) ?? []
+
         return results.map {
-            WidgetPerson(name: $0.name, timezoneIdentifier: $0.timezoneIdentifier, workStartHour: $0.workStartHour, workEndHour: $0.workEndHour)
+            WidgetPerson(
+                name: $0.name,
+                timezoneIdentifier: $0.timezoneIdentifier,
+                workStartHour: $0.workStartHour,
+                workEndHour: $0.workEndHour
+            )
         }
     }
 }
 
-struct ZoneSyncWidgetView: View {
-    let entry: ZoneSyncWidgetEntry
+struct ZoneClockWidgetView: View {
+    let entry: ZoneClockWidgetEntry
     @Environment(\.widgetFamily) var family
 
     var body: some View {
@@ -77,7 +79,7 @@ struct ZoneSyncWidgetView: View {
             Image(systemName: "globe.americas")
                 .font(.title2)
                 .foregroundStyle(.secondary)
-            Text("Add people in ZoneSync")
+            Text("Add people in ZoneClock")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -95,9 +97,12 @@ struct ZoneSyncWidgetView: View {
 
     private var maxPeople: Int {
         switch family {
-        case .systemSmall: return 3
-        case .systemMedium: return 4
-        default: return 6
+        case .systemSmall:
+            return 3
+        case .systemMedium:
+            return 4
+        default:
+            return 6
         }
     }
 
@@ -118,19 +123,17 @@ struct ZoneSyncWidgetView: View {
     }
 
     private func timeString(for person: WidgetPerson) -> String {
-        let formatter = DateFormatter()
-        formatter.timeZone = person.timeZone
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: entry.date)
+        let minute = ClockMath.currentLocalMinute(for: person.timeZone, at: entry.date)
+        return ClockMath.formattedTime(from: minute)
     }
 
     private func statusColor(for person: WidgetPerson) -> Color {
-        var cal = Calendar.current
-        cal.timeZone = person.timeZone
-        let hour = cal.component(.hour, from: entry.date)
-        if hour >= person.workStartHour && hour < person.workEndHour {
+        let workHours = WorkHours(startHour: person.workStartHour, endHour: person.workEndHour)
+        let localMinute = ClockMath.currentLocalMinute(for: person.timeZone, at: entry.date)
+        let distanceToWorkWindow = workHours.distanceToRange(minutesFrom: localMinute)
+        if distanceToWorkWindow == 0 {
             return .green
-        } else if hour >= (person.workStartHour - 2) && hour < (person.workEndHour + 2) {
+        } else if distanceToWorkWindow <= 120 {
             return .yellow
         }
         return .red
@@ -138,20 +141,20 @@ struct ZoneSyncWidgetView: View {
 }
 
 @main
-struct ZoneSyncWidgetBundle: WidgetBundle {
+struct ZoneClockWidgetBundle: WidgetBundle {
     var body: some Widget {
-        ZoneSyncMainWidget()
+        ZoneClockMainWidget()
     }
 }
 
-struct ZoneSyncMainWidget: Widget {
-    let kind = "ZoneSyncWidget"
+struct ZoneClockMainWidget: Widget {
+    let kind = "ZoneClockWidget"
 
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: kind, provider: ZoneSyncWidgetProvider()) { entry in
-            ZoneSyncWidgetView(entry: entry)
+        StaticConfiguration(kind: kind, provider: ZoneClockWidgetProvider()) { entry in
+            ZoneClockWidgetView(entry: entry)
         }
-        .configurationDisplayName("Zone Sync")
+        .configurationDisplayName("ZoneClock")
         .description("See all your team's local times at a glance.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }

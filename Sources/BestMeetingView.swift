@@ -3,13 +3,21 @@ import SwiftUI
 struct BestMeetingView: View {
     let people: [Person]
     let currentTime: Date
+    private static let slotIncrementMinutes = 15
+
+    private var utcDayStart: Date {
+        var utcCalendar = Calendar(identifier: .gregorian)
+        utcCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+        let components = utcCalendar.dateComponents([.year, .month, .day], from: currentTime)
+        return utcCalendar.date(from: components) ?? currentTime
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if overlapSlots.isEmpty {
                 noOverlapView
             } else {
-                ForEach(overlapSlots, id: \.startHourUTC) { slot in
+                ForEach(overlapSlots, id: \.startMinuteUTC) { slot in
                     slotRow(slot)
                 }
             }
@@ -36,15 +44,15 @@ struct BestMeetingView: View {
                 .fill(Color.green)
                 .frame(width: 4, height: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text(slot.displayRange(for: people, currentTime: currentTime))
+                Text(slot.displayRange(utcDayStart: utcDayStart))
                     .font(.subheadline)
                     .fontWeight(.medium)
-                Text(slot.localTimes(for: people, currentTime: currentTime))
+                Text(slot.localTimes(for: people, utcDayStart: utcDayStart))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Text(String(format: "%dh", slot.durationHours))
+            Text(slot.durationLabel)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -58,50 +66,85 @@ struct BestMeetingView: View {
         var slots: [OverlapSlot] = []
         var currentStart: Int?
 
-        for utcHour in 0..<24 {
+        for utcMinute in stride(
+            from: 0,
+            to: ClockMath.minutesPerDay,
+            by: Self.slotIncrementMinutes
+        ) {
+            let utcDate = utcDayStart.addingTimeInterval(TimeInterval(utcMinute * 60))
             let allWorking = people.allSatisfy { person in
-                let offset = person.timeZone.secondsFromGMT(for: currentTime) / 3600
-                let localHour = (utcHour + offset + 24) % 24
-                return localHour >= person.workStartHour && localHour < person.workEndHour
+                let localMinute = ClockMath.localMinute(for: utcDate, in: person.timeZone)
+                let workHours = WorkHours(
+                    startHour: person.workStartHour,
+                    endHour: person.workEndHour
+                )
+                return workHours.contains(minuteOfDay: localMinute)
             }
 
             if allWorking {
                 if currentStart == nil {
-                    currentStart = utcHour
+                    currentStart = utcMinute
                 }
             } else {
                 if let start = currentStart {
-                    slots.append(OverlapSlot(startHourUTC: start, endHourUTC: utcHour))
+                    slots.append(
+                        OverlapSlot(
+                            startMinuteUTC: start,
+                            endMinuteUTC: utcMinute
+                        )
+                    )
                     currentStart = nil
                 }
             }
         }
         if let start = currentStart {
-            slots.append(OverlapSlot(startHourUTC: start, endHourUTC: 24))
+            slots.append(
+                OverlapSlot(
+                    startMinuteUTC: start,
+                    endMinuteUTC: ClockMath.minutesPerDay
+                )
+            )
         }
         return slots
     }
 }
 
 struct OverlapSlot {
-    let startHourUTC: Int
-    let endHourUTC: Int
+    let startMinuteUTC: Int
+    let endMinuteUTC: Int
 
-    var durationHours: Int { endHourUTC - startHourUTC }
-
-    func displayRange(for people: [Person], currentTime: Date) -> String {
-        let userTZ = TimeZone.current
-        let offset = userTZ.secondsFromGMT(for: currentTime) / 3600
-        let localStart = (startHourUTC + offset + 24) % 24
-        let localEnd = (endHourUTC + offset + 24) % 24
-        return String(format: "%02d:00 – %02d:00", localStart, localEnd)
+    var durationMinutes: Int {
+        endMinuteUTC - startMinuteUTC
     }
 
-    func localTimes(for people: [Person], currentTime: Date) -> String {
-        people.map { person in
-            let offset = person.timeZone.secondsFromGMT(for: currentTime) / 3600
-            let localStart = (startHourUTC + offset + 24) % 24
-            return String(format: "%@: %02d:00", person.name, localStart)
+    var durationLabel: String {
+        let hours = durationMinutes / 60
+        let minutes = durationMinutes % 60
+        if hours == 0 {
+            return "\(minutes)m"
+        }
+        if minutes == 0 {
+            return "\(hours)h"
+        }
+        return "\(hours)h \(minutes)m"
+    }
+
+    func displayRange(utcDayStart: Date) -> String {
+        let utcStartDate = utcDayStart.addingTimeInterval(TimeInterval(startMinuteUTC * 60))
+        let utcEndDate = utcDayStart.addingTimeInterval(TimeInterval(endMinuteUTC * 60))
+        let localStart = ClockMath.localMinute(for: utcStartDate, in: .current)
+        let localEnd = ClockMath.localMinute(for: utcEndDate, in: .current)
+        return "\(ClockMath.formattedTime(from: localStart)) – \(ClockMath.formattedTime(from: localEnd))"
+    }
+
+    func localTimes(for people: [Person], utcDayStart: Date) -> String {
+        let utcStartDate = utcDayStart.addingTimeInterval(TimeInterval(startMinuteUTC * 60))
+        let utcEndDate = utcDayStart.addingTimeInterval(TimeInterval(endMinuteUTC * 60))
+
+        return people.map { person -> String in
+            let localStart = ClockMath.localMinute(for: utcStartDate, in: person.timeZone)
+            let localEnd = ClockMath.localMinute(for: utcEndDate, in: person.timeZone)
+            return "\(person.name): \(ClockMath.formattedTime(from: localStart))-\(ClockMath.formattedTime(from: localEnd))"
         }.joined(separator: " · ")
     }
 }
