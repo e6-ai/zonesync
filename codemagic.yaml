@@ -8,7 +8,9 @@ workflows:
     environment:
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: ai.e6.zonesync
+        bundle_identifier:
+          - ai.e6.zonesync
+          - ai.e6.zonesync.widget
       vars:
         BUNDLE_ID: ai.e6.zonesync
         APP_STORE_CONNECT_ISSUER_ID: 6542e2a9-fff8-4124-9083-2186cad6de0b
