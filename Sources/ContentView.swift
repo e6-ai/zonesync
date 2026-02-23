@@ -7,9 +7,20 @@ struct ContentView: View {
     @State private var showingAddPerson = false
     @State private var showingManageTeams = false
     @State private var selectedTeamId: UUID?
-    @State private var currentTime = Date()
+    @State private var currentTime: Date
+    private let usesLiveClock: Bool
 
     private let timer = Timer.publish(every: 30, on: .main, in: .common).autoconnect()
+
+    init(
+        initialTime: Date = Date(),
+        usesLiveClock: Bool = true,
+        initialSelectedTeamId: UUID? = nil
+    ) {
+        _currentTime = State(initialValue: initialTime)
+        _selectedTeamId = State(initialValue: initialSelectedTeamId)
+        self.usesLiveClock = usesLiveClock
+    }
 
     var body: some View {
         NavigationStack {
@@ -34,6 +45,7 @@ struct ContentView: View {
                 ManageTeamsView()
             }
             .onReceive(timer) { _ in
+                guard usesLiveClock else { return }
                 currentTime = Date()
             }
             .onChange(of: teams.map(\.id)) { _, teamIDs in

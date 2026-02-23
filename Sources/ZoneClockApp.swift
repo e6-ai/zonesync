@@ -7,7 +7,11 @@ struct ZoneClockApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            if AppMediaMode.enabled {
+                MediaRootView()
+            } else {
+                ContentView()
+            }
         }
         .modelContainer(sharedModelContainer)
     }
